@@ -51,7 +51,7 @@ struct __attribute__ ((__packed__)) sdshdr5 {
 struct __attribute__ ((__packed__)) sdshdr8 {
     uint8_t len; /* used */
     uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */ /* 低3位存储类型，高5位未使用 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr16 {
