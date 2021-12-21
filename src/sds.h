@@ -44,28 +44,48 @@ typedef char *sds;
 
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
  * However is here to document the layout of type 5 SDS strings. */
+/**
+ *  长度小于32的key用此结构
+ *  __attribute__ ((__packed__))的作用为：告诉编译器不要对这个结构体进行优化对齐，让结构体内部的字段与字段之间紧挨在一起
+ * 存储长度小于2^5字符串
+ */
 struct __attribute__ ((__packed__)) sdshdr5 {
-    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
+    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */ /* 标识当前结构体类型,占1字节(8位),其中低3位存储类型,高5位标识字节数组长度,最大2^5-1=31位 */
     char buf[];
 };
+
+/*len alloc flags称为结构体头部*/
+/*
+* 存储长度在2^5 ~ 2^8之间的字符串
+*/
 struct __attribute__ ((__packed__)) sdshdr8 {
-    uint8_t len; /* used */
-    uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */ /* 低3位存储类型，高5位未使用 */
-    char buf[];
+    uint8_t len; /* used */ /* 记录当前字节数组buf[]长度,不包含\0终止符,占用1字节(8位) */
+    uint8_t alloc; /* excluding the header and null terminator */ /* 记录当前字节数组buf[]总大小,不包含\0终止符和结构体头部,占用1字节(8位) 容量*/
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */ /* 标识当前结构体类型,占1字节(8位),其中低3位存储类型,高5位预留 */
+    char buf[]; /* 柔性数组,存储字符串内容 \0终止符结尾 */
 };
+/*
+* 存储长度在2^8 ~ 2^16之间的字符串
+*/
 struct __attribute__ ((__packed__)) sdshdr16 {
     uint16_t len; /* used */
     uint16_t alloc; /* excluding the header and null terminator */
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
+
+/*
+* 存储长度在2^16 ~ 2^32之间的字符串
+*/
 struct __attribute__ ((__packed__)) sdshdr32 {
     uint32_t len; /* used */
     uint32_t alloc; /* excluding the header and null terminator */
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
+/*
+ * 存储长度大于2^32的字符串
+ */
 struct __attribute__ ((__packed__)) sdshdr64 {
     uint64_t len; /* used */
     uint64_t alloc; /* excluding the header and null terminator */
@@ -78,13 +98,20 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_16 2
 #define SDS_TYPE_32 3
 #define SDS_TYPE_64 4
+/* 类型掩码,低三位,二进制表示:111,用来和类型“与”运算 */
 #define SDS_TYPE_MASK 7
+/* 类型占用字节数 */
 #define SDS_TYPE_BITS 3
+/* 宏定义:得到header的真实地址,并保存到sh变量中 */
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+/* 宏定义:得到header指针 */
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
+/* 宏定义:右移3位得到sdshdr5的长度 */
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+/* 获取sds字符串长度 */
 static inline size_t sdslen(const sds s) {
+    /* sds是连续的地址空间,倒数第二位存储的是类型标识 */
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -101,6 +128,7 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+/* sds剩余可用长度 */
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -127,6 +155,7 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
+/* 设置sds字符串长度 */
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -151,6 +180,7 @@ static inline void sdssetlen(sds s, size_t newlen) {
     }
 }
 
+/* 增加sds字符串长度 */
 static inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -177,6 +207,7 @@ static inline void sdsinclen(sds s, size_t inc) {
 }
 
 /* sdsalloc() = sdsavail() + sdslen() */
+/* 获取sds总空间容量 */
 static inline size_t sdsalloc(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -194,6 +225,7 @@ static inline size_t sdsalloc(const sds s) {
     return 0;
 }
 
+/* 设置sds总空间容量 */
 static inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
